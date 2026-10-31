@@ -50,13 +50,14 @@ export async function POST(request: Request) {
   if (conflict) {
     return NextResponse.json(
       {
-        error: `This time slot is already booked (${formatRange(
+        error: `This time slot is already reserved (${formatRange(
           conflict.startTime,
           conflict.endTime
         )}). Please choose different hours.`,
         conflict: {
           startTime: conflict.startTime,
           endTime: conflict.endTime,
+          status: conflict.status,
         },
       },
       { status: 409 }
