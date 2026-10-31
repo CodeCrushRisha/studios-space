@@ -1,5 +1,11 @@
-import type { Document } from "mongodb"
+import { ObjectId, type Document } from "mongodb"
 import { getDb } from "@/lib/mongodb"
+
+export type BookingStatus =
+  | "Pending"
+  | "Confirmed"
+  | "Completed"
+  | "Cancelled"
 
 export interface Booking {
   id: string
@@ -8,7 +14,7 @@ export interface Booking {
   userEmail: string
   startTime: string
   endTime: string
-  status: "Confirmed" | "Cancelled"
+  status: BookingStatus
   hourlyRate: number
   createdAt: string
 }
@@ -19,7 +25,7 @@ interface BookingDoc extends Document {
   userEmail: string
   startTime: string
   endTime: string
-  status: "Confirmed" | "Cancelled"
+  status: BookingStatus
   hourlyRate: number
   createdAt: Date
 }
@@ -53,8 +59,8 @@ function overlaps(startTime: string, endTime: string, booking: Booking) {
 }
 
 /**
- * Returns the first Confirmed booking that overlaps the given time range.
- * Uses MongoDB range operators ($lt / $gt) when a database is available.
+ * Returns the first active (Pending/Confirmed) booking that overlaps the
+ * given time range. Uses MongoDB range operators ($lt / $gt) when available.
  */
 export async function findConflictingBooking(
   studioId: string,
@@ -69,7 +75,7 @@ export async function findConflictingBooking(
         .collection<BookingDoc>("bookings")
         .findOne({
           studioId,
-          status: "Confirmed",
+          status: { $in: ["Pending", "Confirmed"] },
           startTime: { $lt: endTime },
           endTime: { $gt: startTime },
         })
@@ -85,7 +91,7 @@ export async function findConflictingBooking(
   for (const booking of memoryBookings.values()) {
     if (
       booking.studioId === studioId &&
-      booking.status === "Confirmed" &&
+      (booking.status === "Pending" || booking.status === "Confirmed") &&
       overlaps(startTime, endTime, booking)
     ) {
       return booking
@@ -105,7 +111,7 @@ export interface CreateBookingInput {
 
 export async function createBooking(input: CreateBookingInput): Promise<Booking> {
   const db = await getDb()
-  const doc = { ...input, status: "Confirmed" as const, createdAt: new Date() }
+  const doc = { ...input, status: "Pending" as const, createdAt: new Date() }
 
   if (db) {
     try {
@@ -150,4 +156,60 @@ export async function getBookingsForUser(userEmail: string): Promise<Booking[]> 
   return [...memoryBookings.values()]
     .filter((booking) => booking.userEmail === userEmail)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+function isObjectIdHex(id: string) {
+  return /^[0-9a-fA-F]{24}$/.test(id)
+}
+
+function bookingIdFilter(id: string): Document {
+  return {
+    $or: [{ _id: id }, ...(isObjectIdHex(id) ? [{ _id: new ObjectId(id) }] : [])],
+  }
+}
+
+export type CancelBookingResult =
+  | "cancelled"
+  | "not_found"
+  | "forbidden"
+  | "not_pending"
+
+/**
+ * Cancels a booking the caller owns. Only Pending bookings can be cancelled.
+ */
+export async function cancelBooking(
+  id: string,
+  userEmail: string
+): Promise<CancelBookingResult> {
+  const memoryBooking = memoryBookings.get(id)
+  if (memoryBooking) {
+    if (memoryBooking.userEmail !== userEmail) return "forbidden"
+    if (memoryBooking.status !== "Pending") return "not_pending"
+    memoryBooking.status = "Cancelled"
+    memoryBookings.set(id, memoryBooking)
+    return "cancelled"
+  }
+
+  const db = await getDb()
+  if (db) {
+    try {
+      const collection = db.collection<BookingDoc>("bookings")
+      const doc = await collection.findOne(bookingIdFilter(id))
+      if (!doc) return "not_found"
+      if (doc.userEmail !== userEmail) return "forbidden"
+      if (doc.status !== "Pending") return "not_pending"
+      await collection.updateOne(
+        bookingIdFilter(id),
+        { $set: { status: "Cancelled" } }
+      )
+      return "cancelled"
+    } catch (error) {
+      console.warn(
+        "StudioSpace: MongoDB cancel failed, using in-memory bookings.",
+        error
+      )
+    }
+  }
+
+  return "not_found"
 }
