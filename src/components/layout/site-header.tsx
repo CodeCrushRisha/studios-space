@@ -118,15 +118,15 @@ function UserMenu({ user }: { user: AuthUser }) {
           <LayoutDashboardIcon />
           Dashboard
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/dashboard/add-studio")}>
+        <DropdownMenuItem onClick={() => router.push("/add-studio")}>
           <PlusCircleIcon />
           Add New Studio
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/dashboard/studios")}>
+        <DropdownMenuItem onClick={() => router.push("/my-listings")}>
           <Building2Icon />
           My Studio Listings
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/dashboard/bookings")}>
+        <DropdownMenuItem onClick={() => router.push("/my-bookings")}>
           <CalendarDaysIcon />
           My Bookings
         </DropdownMenuItem>
