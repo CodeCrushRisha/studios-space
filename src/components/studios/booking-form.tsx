@@ -48,8 +48,8 @@ export function BookingForm({ studioId }: { studioId: string }) {
         return
       }
 
-      toast.success("Booking confirmed! It's now in My Bookings.")
-      router.push("/dashboard/bookings")
+      toast.success("Booking saved with status Pending — track it in My Bookings.")
+      router.push("/my-bookings")
       router.refresh()
     } catch {
       toast.error("Booking failed. Please try again.")
@@ -102,8 +102,8 @@ export function BookingForm({ studioId }: { studioId: string }) {
         {submitting ? "Booking…" : "Book Instantly"}
       </Button>
       <p className="text-xs text-muted-foreground">
-        Conflicting time slots with existing confirmed bookings are
-        automatically rejected.
+        Reservations are saved as <strong>Pending</strong> and reject time
+        slots that overlap existing active bookings.
       </p>
     </form>
   )
